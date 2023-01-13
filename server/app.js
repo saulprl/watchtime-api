@@ -28,6 +28,7 @@ app.get("/", async (req, res, next) => {
   if (fs.existsSync(filePath)) {
     data = JSON.parse(fs.readFileSync(filePath, "utf8"));
   } else {
+    fs.mkdirSync(path.join(process.cwd(), "json"));
     data = {
       lastUpdate: new Date().getTime(),
       chatters: {},
