@@ -5,10 +5,10 @@
   "type": "module",
   "main": "./server/server.js",
   "scripts": {
-    "start": "npm run prod",
+    "start": "npm run server",
     "server": "node ./server/server.js",
-    "dev": "SET \"NODE_ENV=development\"&&npm run server",
-    "prod": "SET \"NODE_ENV=production\"&&npm run server",
+    "dev": "npm run server",
+    "prod": "npm run server",
     "watch:dev": "nodemon"
   },
   "nodemonConfig": {
