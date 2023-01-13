@@ -1,0 +1,19 @@
+{
+  "name": "watchtime-api",
+  "version": "0.1.0",
+  "description": "A watchtime API route for a bot to store chatter watch time for a stream.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "api",
+    "rest",
+    "twitch"
+  ],
+  "author": "saulprl",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
