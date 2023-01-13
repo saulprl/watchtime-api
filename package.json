@@ -4,15 +4,23 @@
   "description": "A watchtime API route for a bot to store chatter watch time for a stream.",
   "main": "./server/index.js",
   "scripts": {
-    "start": "node ./server/index.js",
+    "start": "npm run prod",
     "build": "npm-run-all clean transpile",
+    "server": "node ./dist/index.js",
+    "dev": "NODE_ENV=development npm-run-all build server",
+    "prod": "NODE_ENV=production npm-run-all build server",
     "transpile": "babel ./server --out-dir dist",
+    "watch:dev": "nodemon",
     "clean": "rimraf ./dist-server"
   },
   "babel": {
     "presets": [
       "@babel/preset-env"
     ]
+  },
+  "nodemonConfig": {
+    "exec": "npm run dev",
+    "watch": ["server/*"]
   },
   "keywords": [
     "api",
