@@ -62,12 +62,14 @@ app.get("/", async (req, res, next) => {
       (new Date().getTime() - data.lastUpdate) / 1000
     );
 
-    if (timeDiff < 600) {
+    if (timeDiff < 2400) {
       for (const viewer of activeViewers) {
-        if (!Object.keys(data.chatters).includes(viewer)) {
-          data.chatters[viewer] = 0;
-        } else {
-          data.chatters[viewer] += timeDiff;
+        if (!data.ignoreUsers.includes(viewer)) {
+          if (!Object.keys(data.chatters).includes(viewer)) {
+            data.chatters[viewer] = 0;
+          } else {
+            data.chatters[viewer] += timeDiff;
+          }
         }
       }
       data.lastUpdate += timeDiff * 1000;
@@ -94,13 +96,13 @@ app.get("/", async (req, res, next) => {
     }
   } else if (/get/i.test(req.query["action"])) {
     if (Object.keys(data.chatters).length === 0) {
-      return res.status(404).json({
+      return res.status(202).json({
         message: "No watchtime records have been found. Update first.",
       });
     }
 
     if (!req.query["user"]) {
-      return res.status(400).json({
+      return res.status(202).json({
         message: "The request must contain a username.",
       });
     }
@@ -108,11 +110,11 @@ app.get("/", async (req, res, next) => {
     const username = req.query["user"].toLowerCase();
     if (!Object.keys(data.chatters).includes(username)) {
       if (data["ignoreUsers"].includes(username)) {
-        return res.status(404).json({
+        return res.status(202).json({
           message: `The user ${username} is currently excluded from the watchtime tracker.`,
         });
       }
-      return res.status(404).json({
+      return res.status(202).json({
         message: `There are no watchtime records for ${username}, update first.`,
       });
     } else {
@@ -120,7 +122,7 @@ app.get("/", async (req, res, next) => {
         (new Date().getTime() - data.lastUpdate) / 1000
       );
 
-      if (timeDiff > 600) {
+      if (timeDiff > 2400) {
         timeDiff = 0;
       }
 
@@ -158,7 +160,7 @@ app.get("/", async (req, res, next) => {
     }
   } else if (/reset/i.test(req.query["action"])) {
     if (Object.keys(data.chatters).length === 0) {
-      return res.status(404).json({
+      return res.status(202).json({
         message: `No watchtime records have been found for channel ${channel}. Update first.`,
       });
     } else {
@@ -211,7 +213,7 @@ app.get("/", async (req, res, next) => {
       const minSeconds = +req.query["min"];
 
       if (!Object.keys(data.chatters).length > 0) {
-        return res.status(404).json({
+        return res.status(202).json({
           message: `There are no watchtime records for channel ${channel}. Update first.`,
         });
       } else {
@@ -235,7 +237,7 @@ app.get("/", async (req, res, next) => {
       const limit = +req.query["top"];
 
       if (!Object.keys(data.chatters).length > 0) {
-        return res.status(404).json({
+        return res.status(202).json({
           message: `There are no watchtime records for channel ${channel}. Update first.`,
         });
       } else {
@@ -260,14 +262,6 @@ app.get("/", async (req, res, next) => {
 
     return res.status(400).json({
       message: "The request must contain a min or top parameter.",
-    });
-  }
-});
-
-app.post("/", (req, res, next) => {
-  if (!req.query["channel"]) {
-    return res.status(400).json({
-      message: "The request must contain a channel name.",
     });
   }
 });
