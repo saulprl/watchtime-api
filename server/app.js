@@ -1,9 +1,8 @@
-import path from "path";
-import * as fs from "fs";
 import express from "express";
 import fetch from "node-fetch";
 
 const app = express();
+const FIREBASE_API = process.env.FIREBASE;
 
 app.use(express.json());
 
@@ -21,21 +20,19 @@ app.get("/", async (req, res, next) => {
   }
 
   const channel = req.query["channel"].toLowerCase();
-  const fileName = `${channel}.watchtime.json`;
-  const filePath = path.join(process.cwd(), "json", fileName);
+  const apiUrl = `${FIREBASE_API}/${channel}.json`;
+
+  const firebaseAPIRes = await fetch(apiUrl);
+  const jsonRes = await firebaseAPIRes.json();
+
   let data;
 
-  if (fs.existsSync(filePath)) {
-    data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (jsonRes) {
+    data = jsonRes;
   } else {
-    if (!fs.existsSync(path.join(process.cwd(), "json"))) {
-      fs.mkdirSync(path.join(process.cwd(), "json"));
-    }
-
     data = {
       lastUpdate: new Date().getTime(),
       chatters: {},
-      ignoreUsers: [],
     };
   }
 
@@ -56,6 +53,9 @@ app.get("/", async (req, res, next) => {
       ...tmiData["vips"],
       ...tmiData["moderators"],
       ...tmiData["viewers"],
+      ...tmiData["staff"],
+      ...tmiData["admins"],
+      ...tmiData["global_mods"],
     ];
 
     const timeDiff = Math.floor(
@@ -64,40 +64,59 @@ app.get("/", async (req, res, next) => {
 
     if (timeDiff < 2400) {
       for (const viewer of activeViewers) {
-        if (!data.ignoreUsers.includes(viewer)) {
-          if (!Object.keys(data.chatters).includes(viewer)) {
-            data.chatters[viewer] = 0;
-          } else {
-            data.chatters[viewer] += timeDiff;
-          }
+        if (!Object.keys(data.chatters).includes(viewer)) {
+          data.chatters[viewer] = { watchtime: 0, ignore: false };
+        } else if (!data.chatters[viewer]["ignore"]) {
+          data.chatters[viewer]["watchtime"] += timeDiff;
         }
       }
       data.lastUpdate += timeDiff * 1000;
 
-      fs.writeFileSync(filePath, JSON.stringify(data), {
-        encoding: "utf8",
+      const firebaseRes = await fetch(apiUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
       });
 
-      return res.status(200).json({
-        message: "Watchtimes have been updated.",
-        lastUpdate: new Date(data.lastUpdate),
-      });
+      if (firebaseRes.ok) {
+        return res.status(200).json({
+          message: "Watchtimes have been updated.",
+          lastUpdate: new Date(data.lastUpdate),
+        });
+      } else {
+        return res.status(202).json({
+          message: "There was an error connecting to the API.",
+        });
+      }
     } else {
       data.lastUpdate += timeDiff * 1000;
 
-      fs.writeFileSync(filePath, JSON.stringify(data), {
-        encoding: "utf8",
+      const firebaseRes = await fetch(apiUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
       });
 
-      return res.status(200).json({
-        message: "Set last update, no watchtimes modified.",
-        lastUpdate: new Date(data.lastUpdate),
-      });
+      if (firebaseRes.ok) {
+        return res.status(200).json({
+          message: "Set last update, no watchtimes modified.",
+          lastUpdate: new Date(data.lastUpdate),
+        });
+      } else {
+        return res.status(202).json({
+          messsage: "There was an error connecting to the API.",
+        });
+      }
     }
   } else if (/get/i.test(req.query["action"])) {
     if (Object.keys(data.chatters).length === 0) {
       return res.status(202).json({
-        message: "No watchtime records have been found. Update first.",
+        message:
+          "No watchtime records have been found. Might need to update first.",
       });
     }
 
@@ -109,72 +128,82 @@ app.get("/", async (req, res, next) => {
 
     const username = req.query["user"].toLowerCase();
     if (!Object.keys(data.chatters).includes(username)) {
-      if (data["ignoreUsers"].includes(username)) {
-        return res.status(202).json({
-          message: `The user ${username} is currently excluded from the watchtime tracker.`,
-        });
-      }
       return res.status(202).json({
         message: `There are no watchtime records for ${username}, update first.`,
       });
-    } else {
-      let timeDiff = Math.floor(
-        (new Date().getTime() - data.lastUpdate) / 1000
-      );
+    }
 
-      if (timeDiff > 2400) {
-        timeDiff = 0;
-      }
-
-      const watchTime = data.chatters[username] + timeDiff;
-
-      let seconds = watchTime;
-      let minutes = Math.floor(seconds / 60);
-      seconds -= minutes * 60;
-      let hours = Math.floor(minutes / 60);
-      minutes -= hours * 60;
-      let days = Math.floor(hours / 24);
-      hours -= days * 24;
-      let months = Math.floor(days / 30.437);
-      days -= Math.floor(months * 30.437);
-
-      let responseMessage = `${username} has spent `;
-      if (months > 0) {
-        responseMessage += `${months} months, `;
-      }
-      if (days > 0) {
-        responseMessage += `${days} days, `;
-      }
-      if (hours > 0) {
-        responseMessage += `${hours} hours, `;
-      }
-      if (minutes > 0) {
-        responseMessage += `${minutes} minutes, `;
-      }
-      responseMessage += `${seconds} seconds watching ${channel} WICKED`;
-
-      return res.status(200).json({
-        message: responseMessage,
-        seconds: watchTime,
+    if (data.chatters[username].ignore) {
+      return res.status(202).json({
+        message: `The user ${username} is currently excluded from the watchtime tracker.`,
       });
     }
+
+    let timeDiff = Math.floor((new Date().getTime() - data.lastUpdate) / 1000);
+    if (timeDiff > 2400) {
+      timeDiff = 0;
+    }
+
+    const watchTime = data.chatters[username].watchtime + timeDiff;
+
+    let seconds = watchTime;
+    let minutes = Math.floor(seconds / 60);
+    seconds -= minutes * 60;
+    let hours = Math.floor(minutes / 60);
+    minutes -= hours * 60;
+    let days = Math.floor(hours / 24);
+    hours -= days * 24;
+    let months = Math.floor(days / 30.437);
+    days -= Math.floor(months * 30.437);
+
+    let responseMessage = `${username} has spent `;
+    if (months > 0) {
+      responseMessage += `${months} months, `;
+    }
+    if (days > 0) {
+      responseMessage += `${days} days, `;
+    }
+    if (hours > 0) {
+      responseMessage += `${hours} hours, `;
+    }
+    if (minutes > 0) {
+      responseMessage += `${minutes} minutes, `;
+    }
+    responseMessage += `${seconds} seconds watching ${channel} WICKED`;
+
+    return res.status(200).json({
+      message: responseMessage,
+      seconds: watchTime,
+    });
   } else if (/reset/i.test(req.query["action"])) {
     if (Object.keys(data.chatters).length === 0) {
       return res.status(202).json({
-        message: `No watchtime records have been found for channel ${channel}. Update first.`,
+        message: `No watchtime records have been found for channel ${channel}. Might need to update first.`,
       });
     } else {
       for (const viewer in data.chatters) {
-        data.chatters[viewer] = 0;
+        data.chatters[viewer].watchtime = 0;
       }
       data.lastUpdate = new Date().getTime();
 
-      fs.writeFileSync(filePath, JSON.stringify(data), { encoding: "utf8" });
-
-      return res.status(200).json({
-        message: `Watchtimes for channel ${channel} have been reset.`,
-        lastUpdate: new Date(data.lastUpdate),
+      const firebaseRes = await fetch(apiUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
       });
+
+      if (firebaseRes.ok) {
+        return res.status(200).json({
+          message: `Watchtimes for channel ${channel} have been reset.`,
+          lastUpdate: new Date(data.lastUpdate),
+        });
+      } else {
+        return res.status(202).json({
+          message: "There was an error connecting to the API.",
+        });
+      }
     }
   } else if (/ignore/i.test(req.query["action"])) {
     if (!req.query["user"]) {
@@ -184,28 +213,33 @@ app.get("/", async (req, res, next) => {
     }
 
     const user = req.query["user"].toLowerCase();
-    const channel = req.query["channel"].toLowerCase();
+    let resMessage = "";
 
-    if (!data["ignoreUsers"].includes(user)) {
-      data["ignoreUsers"].push(user);
+    if (Object.keys(data.chatters).includes(user)) {
+      data.chatters[user].ignore = !data.chatters[user].ignore;
+      resMessage = data.chatters[user].ignore
+        ? `The user ${user} has been excluded from the watchtime tracker for channel ${channel}.`
+        : `The user ${user} is no longer omitted for channel ${channel}.`;
+    } else {
+      data.chatters[user] = { watchtime: 0, ignore: true };
+      resMessage = `The user ${user} has been excluded from the watchtime tracker for channel ${channel}.`;
+    }
 
-      if (Object.keys(data.chatters).includes(user)) {
-        delete data.chatters[user];
-      }
+    const firebaseRes = await fetch(apiUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
 
-      fs.writeFileSync(filePath, JSON.stringify(data), { encoding: "utf8" });
-
+    if (firebaseRes.ok) {
       return res.status(201).json({
-        message: `The user ${user} has been excluded from the watchtime tracker for channel ${channel}.`,
+        message: resMessage,
       });
     } else {
-      data["ignoreUsers"] = data["ignoreUsers"].filter((usr) => usr !== user);
-      data["chatters"][user] = 0;
-
-      fs.writeFileSync(filePath, JSON.stringify(data), { encoding: "utf8" });
-
       return res.status(202).json({
-        message: `The user ${user} has been restored for channel ${channel}.`,
+        message: "There was an error connecting to the API.",
       });
     }
   } else if (/fetch/i.test(req.query["action"])) {
@@ -214,16 +248,19 @@ app.get("/", async (req, res, next) => {
 
       if (!Object.keys(data.chatters).length > 0) {
         return res.status(202).json({
-          message: `There are no watchtime records for channel ${channel}. Update first.`,
+          message: `There are no watchtime records for channel ${channel}. Might need to update first.`,
         });
       } else {
         const filteredChatters = [];
 
         for (const chatter in data.chatters) {
-          if (data.chatters[chatter] >= minSeconds) {
+          if (
+            data.chatters[chatter].watchtime >= minSeconds &&
+            !data.chatters[chatter].ignore
+          ) {
             filteredChatters.push({
               name: chatter,
-              watchtime: data.chatters[chatter],
+              watchtime: data.chatters[chatter].watchtime,
             });
           }
         }
@@ -234,19 +271,26 @@ app.get("/", async (req, res, next) => {
         });
       }
     } else if (req.query["top"]) {
-      const limit = +req.query["top"];
+      let limit = +req.query["top"];
 
       if (!Object.keys(data.chatters).length > 0) {
         return res.status(202).json({
-          message: `There are no watchtime records for channel ${channel}. Update first.`,
+          message: `There are no watchtime records for channel ${channel}. Might need to update first.`,
         });
       } else {
+        limit =
+          limit > Object.keys(data.chatters).length
+            ? Object.keys(data.chatters).length
+            : limit;
+
         const chattersArray = [];
         for (const chatter in data.chatters) {
-          chattersArray.push({
-            name: chatter,
-            watchtime: data.chatters[chatter],
-          });
+          if (!data.chatters[chatter].ignore) {
+            chattersArray.push({
+              name: chatter,
+              watchtime: data.chatters[chatter].watchtime,
+            });
+          }
         }
 
         const sortedChatters = chattersArray
