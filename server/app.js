@@ -1,8 +1,28 @@
 import express from "express";
 import fetch from "node-fetch";
+import {
+  ToadScheduler,
+  SimpleIntervalJob,
+  Task,
+  AsyncTask,
+} from "toad-scheduler";
 
 const app = express();
 const FIREBASE_API = process.env.FIREBASE;
+
+const trackedChannels = [];
+
+const scheduler = new ToadScheduler();
+
+// const task = new Task("test", () => {
+//   console.log(`Test running.\nTracked Channels: ${trackedChannels}.`);
+// });
+
+// const job = new SimpleIntervalJob({ seconds: 10, runImmediately: true }, task, {
+//   id: "1",
+// });
+
+// scheduler.addSimpleIntervalJob(job);
 
 app.use(express.json());
 
@@ -20,20 +40,50 @@ app.get("/", async (req, res, next) => {
   }
 
   const channel = req.query["channel"].toLowerCase();
-  const apiUrl = `${FIREBASE_API}/${channel}.json`;
+  // const apiUrl = `${FIREBASE_API}/${channel}.json`;
 
-  const firebaseAPIRes = await fetch(apiUrl);
-  const jsonRes = await firebaseAPIRes.json();
+  // const firebaseAPIRes = await fetch(apiUrl);
+  // const jsonRes = await firebaseAPIRes.json();
 
-  let data;
+  // let data;
 
-  if (jsonRes) {
-    data = jsonRes;
-  } else {
-    data = {
-      lastUpdate: new Date().getTime(),
-      chatters: {},
-    };
+  // if (jsonRes) {
+  //   data = jsonRes;
+  // } else {
+  //   data = {
+  //     lastUpdate: new Date().getTime(),
+  //     chatters: {},
+  //   };
+  // }
+
+  if (/track/i.test(req.query["action"])) {
+    // Create task and job for the incoming request.
+    const task = new AsyncTask(
+      channel,
+      async () => {
+        console.log(`Tracking channel ${channel}.`);
+        const tmiUrl = `http://tmi.twitch.tv/group/user/${channel}/chatters`;
+        console.log(tmiUrl);
+        const response = await fetch(tmiUrl);
+
+        console.log((await response.json())["chatters"]);
+      },
+      (err) => {
+        console.log(err);
+      }
+    );
+
+    const job = new SimpleIntervalJob(
+      { seconds: 15, runImmediately: true },
+      task,
+      { id: channel }
+    );
+
+    scheduler.addSimpleIntervalJob(job);
+
+    return res.status(200).json({
+      message: `Added channel ${channel}`,
+    });
   }
 
   if (/update/i.test(req.query["action"])) {
