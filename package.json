@@ -14,7 +14,8 @@
   "nodemonConfig": {
     "exec": "npm run dev",
     "watch": [
-      "server/*"
+      "server/*",
+      "controllers/*"
     ]
   },
   "keywords": [
@@ -25,6 +26,7 @@
   "author": "saulprl",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "node-fetch": "^3.3.0",
     "toad-scheduler": "^2.2.0"
