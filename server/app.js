@@ -1,12 +1,12 @@
 import express from "express";
-import fetch from "node-fetch";
-import {
-  ToadScheduler,
-  SimpleIntervalJob,
-  Task,
-  AsyncTask,
-} from "toad-scheduler";
 
+import fetch from "node-fetch";
+import * as dotenv from "dotenv";
+import { ToadScheduler, SimpleIntervalJob, AsyncTask } from "toad-scheduler";
+
+import updateWatchTime from "../controllers/update.js";
+
+dotenv.config();
 const app = express();
 const FIREBASE_API = process.env.FIREBASE;
 
@@ -56,34 +56,44 @@ app.get("/", async (req, res, next) => {
   //   };
   // }
 
+  switch (req.query["action"]) {
+    case "track":
+      if (scheduler.existsById(channel)) {
+        return res.status(202).json({
+          message: `Watch times for channel ${channel} are already being tracked.`,
+        });
+      }
+
+      const task = new AsyncTask(
+        channel,
+        updateWatchTime.bind(null, channel),
+        (err) => {
+          console.log(err);
+        }
+      );
+
+      const job = new SimpleIntervalJob(
+        { seconds: 15, runImmediately: true },
+        task,
+        { id: channel }
+      );
+
+      scheduler.addSimpleIntervalJob(job);
+
+      return res.status(201).json({
+        message: `Added channel ${channel}`,
+      });
+    case "get":
+      
+      break;
+    case "reset":
+      break;
+    case "fetch":
+      break;
+  }
+
   if (/track/i.test(req.query["action"])) {
     // Create task and job for the incoming request.
-    const task = new AsyncTask(
-      channel,
-      async () => {
-        console.log(`Tracking channel ${channel}.`);
-        const tmiUrl = `http://tmi.twitch.tv/group/user/${channel}/chatters`;
-        console.log(tmiUrl);
-        const response = await fetch(tmiUrl);
-
-        console.log((await response.json())["chatters"]);
-      },
-      (err) => {
-        console.log(err);
-      }
-    );
-
-    const job = new SimpleIntervalJob(
-      { seconds: 15, runImmediately: true },
-      task,
-      { id: channel }
-    );
-
-    scheduler.addSimpleIntervalJob(job);
-
-    return res.status(200).json({
-      message: `Added channel ${channel}`,
-    });
   }
 
   if (/update/i.test(req.query["action"])) {
