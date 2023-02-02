@@ -5,8 +5,8 @@
   "type": "module",
   "main": "./server/server.js",
   "scripts": {
-    "start": "npm run server",
     "server": "node ./server/server.js",
+    "start": "npm run server",
     "dev": "npm run server",
     "prod": "npm run server",
     "watch:dev": "nodemon"
