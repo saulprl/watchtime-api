@@ -6,7 +6,7 @@
   "main": "./server/server.js",
   "scripts": {
     "server": "node ./server/server.js",
-    "start": "npm run server",
+    "start": "node ./server/server.js",
     "dev": "npm run server",
     "prod": "npm run server",
     "watch:dev": "nodemon"
