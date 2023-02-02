@@ -1,10 +1,14 @@
-import express from "express";
+import express, { response } from "express";
 
 import fetch from "node-fetch";
 import * as dotenv from "dotenv";
 import { ToadScheduler, SimpleIntervalJob, AsyncTask } from "toad-scheduler";
 
 import updateWatchTime from "../controllers/update.js";
+import ignoreUser from "../controllers/ignoreUser.js";
+import getUser from "../controllers/getUser.js";
+import restoreUser from "../controllers/restoreUser.js";
+import resetChannel from "../controllers/resetChannel.js";
 
 dotenv.config();
 const app = express();
@@ -84,14 +88,68 @@ app.get("/", async (req, res, next) => {
         message: `Added channel ${channel}`,
       });
     case "get":
-      
-      break;
+      const userToGet = req.query["user"].toLowerCase();
+
+      try {
+        const { message, seconds } = await getUser(channel, userToGet);
+
+        return res.status(200).json({
+          message,
+          seconds,
+        });
+      } catch (error) {
+        return res.status(202).json({
+          message: error.message,
+          error: error,
+        });
+      }
+    case "ignore":
+      const userToIgnore = req.query["user"].toLowerCase();
+
+      try {
+        await ignoreUser(channel, userToIgnore);
+
+        return res.status(200).json({
+          message: `The user ${userToIgnore}'s watchtime is no longer being tracked for channel ${channel}.`,
+        });
+      } catch (error) {
+        return res.status(202).json({
+          message: error.message,
+          error: error,
+        });
+      }
+    case "restore":
+      const userToRestore = req.query["user"].toLowerCase();
+
+      try {
+        await restoreUser(channel, userToRestore);
+
+        return res.status(200).json({
+          message: `The user ${userToRestore}'s watch time tracker has been restored for channel ${channel}.`,
+        });
+      } catch (error) {
+        return res.status(202).json({
+          message: error.message,
+          error: error,
+        });
+      }
     case "reset":
-      break;
+      try {
+        await resetChannel(channel);
+
+        return res.status(200).json({
+          message: `Watch time records for channel ${channel} have been reset.`,
+        });
+      } catch (error) {
+        return res.status(202).json({
+          message: error.message,
+          error: error,
+        });
+      }
     case "fetch":
       break;
   }
-
+  /*
   if (/track/i.test(req.query["action"])) {
     // Create task and job for the incoming request.
   }
@@ -368,6 +426,7 @@ app.get("/", async (req, res, next) => {
       message: "The request must contain a min or top parameter.",
     });
   }
+  */
 });
 
 export default app;
