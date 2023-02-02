@@ -9,6 +9,7 @@ import ignoreUser from "../controllers/ignoreUser.js";
 import getUser from "../controllers/getUser.js";
 import restoreUser from "../controllers/restoreUser.js";
 import resetChannel from "../controllers/resetChannel.js";
+import { fetchMinimum, fetchTop } from "../controllers/fetchUsers.js";
 
 dotenv.config();
 const app = express();
@@ -110,7 +111,7 @@ app.get("/", async (req, res, next) => {
         await ignoreUser(channel, userToIgnore);
 
         return res.status(200).json({
-          message: `The user ${userToIgnore}'s watchtime is no longer being tracked for channel ${channel}.`,
+          message: `${userToIgnore}'s watchtime is no longer being tracked for channel ${channel}.`,
         });
       } catch (error) {
         return res.status(202).json({
@@ -147,6 +148,39 @@ app.get("/", async (req, res, next) => {
         });
       }
     case "fetch":
+      if (req.query["min"]) {
+        try {
+          const minChatters = await fetchMinimum(channel, +req.query["min"]);
+
+          return res.status(200).json({
+            message: `Viewers with at least ${req.query["min"]} seconds spent watching ${channel}.`,
+            minChatters,
+          });
+        } catch (error) {
+          return res.status(202).json({
+            message: error.message,
+            error: error,
+          });
+        }
+      }
+      if (req.query["top"]) {
+        try {
+          const { sortedChatters, limit } = await fetchTop(
+            channel,
+            +req.query["top"]
+          );
+
+          return res.status(200).json({
+            message: `Top ${limit} watch times for channel ${channel}.`,
+            sortedChatters,
+          });
+        } catch (error) {
+          return res.status(202).json({
+            message: error.message,
+            error: error,
+          });
+        }
+      }
       break;
   }
   /*
